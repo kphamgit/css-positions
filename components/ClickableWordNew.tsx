@@ -1,5 +1,5 @@
 import { AudioPlayer, AudioSource } from 'expo-audio';
-import React, { memo, type ReactElement, useCallback, useEffect, useState } from 'react';
+import React, { memo, type ReactElement, useCallback, useState } from 'react';
 import { StyleSheet, type ViewStyle } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -60,6 +60,22 @@ while offset manages the position of the ghost (and also serves as the source of
     });
   }, [index, offset, onDrop]);
 
+  /*
+why are translateX (line 63) and translateY (line 71) are derivedValues?
+Because translateX and translateY need to reactively recompute whenever the shared values 
+they depend on change.
+useDerivedValue sets up a reactive computation on the UI thread — 
+whenever isInBank.value, offset.originalX.value, offset.x.value etc. change, 
+translateX and translateY automatically recompute and withTiming fires to animate
+ to the new target.
+
+If they were just regular variables instead:
+const translateX = offset.originalX.value; // computed once, never updates
+They would only capture the value at render time and never react to changes driven by taps or gestures on the UI thread.
+
+useDerivedValue is essentially the worklet equivalent of useMemo — but reactive to shared value changes on the UI thread rather than React state changes on the JS thread.
+  */
+
   const translateX = useDerivedValue(() =>
     withTiming(
       isInBank.value ? offset.originalX.value : offset.x.value,
@@ -69,12 +85,11 @@ while offset manages the position of the ghost (and also serves as the source of
   );
 
   const translateY = useDerivedValue(() => {
-    console.log(" in useDerivedValue offsets is:")
-    offsets.forEach((o, i) => {
-      console.log(`index ${i}: order=${o.order.value}, x=${o.x.value}, y=${o.y.value}, originalX=${o.originalX.value}, originalY=${o.originalY.value}`);
-    });
-
-    console.log("translateY: isInBank=", isInBank.value, "originalY=", offset.originalY.value, "y=", offset.y.value, "wordBankOffsetY=", wordBankOffsetY);
+    console.log("????????????? translateY: isInBank=", isInBank.value, "originalY=", offset.originalY.value, "y=", offset.y.value, "wordBankOffsetY=", wordBankOffsetY);
+    // if word is in bank, translateY animates to originalY + wordBankOffsetY
+    //  (position in the bank)
+    // if not, translateY animates to y (position in the answer area, which is computed 
+    // by calculateLayout based on the word's order and the container width)
     return withTiming(
       isInBank.value ? offset.originalY.value + wordBankOffsetY : offset.y.value,
       { duration: 250 },
@@ -97,8 +112,8 @@ while offset manages the position of the ghost (and also serves as the source of
 
   const ghostStyle = useAnimatedStyle(() => ({
     position: "absolute",
-    top: 0,
-    left: -1,
+    top: 0,  // must specify for absolute positioning, but actual position is determined by translateX/Y
+    left: -1, // must specify for absolute positioning, but actual position is determined by translateX/Y
     width: offset.width.value + 2,
     height: wordHeight,
     opacity: isInBank.value ? 0 : 0.3,
@@ -116,12 +131,6 @@ while offset manages the position of the ghost (and also serves as the source of
     setPlayer(createAudioPlayer(my_mp3));
   }, [children]);
 */
-  useEffect(() => {
-    console.log("--------------> offsets state in ClickableWordNew useEffect: index =", index);
-    offsets.forEach((o, i) => {
-      console.log(`index ${i}: order=${o.order.value}, x=${o.x.value}, y=${o.y.value}, originalX=${o.originalX.value}, originalY=${o.originalY.value}`);
-    });
-  }, [offsets[index].order.value, offsets[index].x.value, offsets[index].y.value]);
 
   const playAudio = () => {
     const mySrc: AudioSource = { uri: mp3 };
@@ -134,10 +143,10 @@ while offset manages the position of the ghost (and also serves as the source of
     runOnJS(playAudio)();
     runOnJS(parentFunc)();
 
-    console.log("\n ClickableWordNew tapGesture ENTRY - for word at INDEX ", index, ' offsets state:');
-    offsets.forEach((o, i) => {
-      console.log(`index ${i}: order=${o.order.value}, x=${o.x.value}, y=${o.y.value}, originalX=${o.originalX.value}, originalY=${o.originalY.value}`);
-    });
+    // console.log("\n ClickableWordNew tapGesture ENTRY - for word at INDEX ", index, ' offsets state:');
+    //offsets.forEach((o, i) => {
+     // console.log(`index ${i}: order=${o.order.value}, x=${o.x.value}, y=${o.y.value}, originalX=${o.originalX.value}, originalY=${o.originalY.value}`);
+    //});
     //decides whether the word is moving to the answer area or back to the bank:
     if (isInBank.value) {
       // clicked word is currently in the bank, moving to answer area: assign it the last order in the answer area + 1
@@ -150,8 +159,12 @@ so the tapped word gets placed at the end of whatever words are already in the a
 For example, if the answer area has 2 words with order 0 and 1, lastOrder returns 2,
  and the new word gets order = 2 (placed third).
       */
-      console.log("\nClickableWordNew Tapped word is in bank, let's move it answer area. FIRST, set its order to lastOrder(offsets): ", lastOrder(offsets));
-      offset.order.value = lastOrder(offsets);
+      console.log("\nClickableWordNew ENTRY tapGesture BEFORE calling calculateLayout offsets is ");
+        offsets.forEach((o, i) => {
+          console.log(`index ${i}: order=${o.order.value}, x=${o.x.value}, y=${o.y.value}, originalX=${o.originalX.value}, originalY=${o.originalY.value}`);
+        });
+        
+        offset.order.value = lastOrder(offsets);
     } else {
       // clicked word is currently in the answer area, moving back to bank: set its order to -1 and remove it 
       // from the offsets array so that it doesn't take up space in the layout of the answer area
@@ -159,7 +172,7 @@ For example, if the answer area has 2 words with order 0 and 1, lastOrder return
       remove(offsets, index);
     }
 
-    console.log("\nClickableWordNew: After updating order value, offsets state is:");
+    console.log("\nClickableWordNew: tapGesture BEFORE calling calculateLayout, after updating order value, offsets state is:");
     offsets.forEach((o, i) => {
       console.log(`index ${i}: order=${o.order.value}, x=${o.x.value}, y=${o.y.value}, originalX=${o.originalX.value}, originalY=${o.originalY.value}`);
     });
@@ -170,10 +183,13 @@ For example, if the answer area has 2 words with order 0 and 1, lastOrder return
       calculateLayout() recomputes the x/y positions for every word in the answer area given the updated order values. 
       This is what triggers the animated repositioning — writing to the shared values causes withTiming in translateX/translateY to fire
     */
-    console.log("\nClickableWordNew tapGesture - SECOND: calling calculateLayout with updated offsets after changing order of tapped word. ");
-    console.log("\nClickableWordNew Before calling calculateLayout, containerWidth=", containerWidth);
+    //console.log("\nClickableWordNew tapGesture - SECOND: calling calculateLayout with updated offsets after changing order of tapped word. ");
+    //console.log("\nClickableWordNew Before calling calculateLayout, containerWidth=", containerWidth);
     calculateLayout(offsets, containerWidth, wordHeight, wordGap, lineGap);
-    console.log("\nClickableWordNew After calling calculateLayout, containerWidth=", containerWidth);
+    console.log("\nClickableWordNew After calling calculateLayout, offsets state is:");
+    offsets.forEach((o, i) => {
+      console.log(`index ${i}: order=${o.order.value}, x=${o.x.value}, y=${o.y.value}, originalX=${o.originalX.value}, originalY=${o.originalY.value}`);
+    });
   
     // syncs translation.x/y to the word's newly computed position.
     translation.x.value = offset.x.value;

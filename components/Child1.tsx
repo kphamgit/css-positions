@@ -10,9 +10,12 @@ import Placeholder from './Placeholder';
 import Word from './Word';
 import WordContext from './WordContext';
 
-const words = ["three"];
+const words = ["one", "two", "three"];
 
-
+interface LayoutType {
+    numLines: number;
+    wordStyles: StyleProp<ViewStyle>[];
+}
 function Child1() {
 
     const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
@@ -30,7 +33,7 @@ const [containerWidth, setContainerWidth] = useState(0);
 // containerWidth is the width of the container that holds the words. It is set inside ComputeWordLayout's onLayout,
 //  which is called after ComputeWordLayout finishes rendering the words and measures their layout.
 
-const [layout, setLayout] = useState<{ numLines: number; wordStyles: StyleProp<ViewStyle>[] } | null>(null);
+const [layout, setLayout] = useState<LayoutType | null>(null);
   // this layout state variable is very important. It will be set by the ComputeWordLayout child component 
   // after it measures the words and calculates their positions.
 
@@ -99,6 +102,7 @@ const wordElements = useMemo(() => {
 
     const initialized = layout && containerWidth > 0;
     console.log("Child1: layout: ", layout, "containerWidth: ", containerWidth, "initialized: ", initialized);
+    // offsets state, which contains shared values for Reanimated, is modified in ComputerWorkLayout,
     if (!initialized) {
         return (
             <View style={styles.container} onLayout={onLayout}>
@@ -130,6 +134,10 @@ const wordElements = useMemo(() => {
   const enable_checkButton = () => {
      console.log("enable_checkButton called from Child1");
   }
+
+  // offsets state is passed into ClickableWordNew for animation, it is also used
+  // to recalculate the layout whenever clicks on a word, either to move it 
+  // from bank to answer area or vice versa, or to rearrange the order of words in the answer area.
 
   return (
     <GestureHandlerRootView>

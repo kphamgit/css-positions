@@ -45,7 +45,7 @@ const lineGap = lineHeight - wordHeight; // the gap between lines is the line he
  */
 export default function ComputeWordLayout({
   children,
-  offsets,
+  offsets,  // shared values, to be modified in this component with the measured word positions/sizes
   onLayout,
   wordHeight,
   lineHeight,
@@ -75,7 +75,7 @@ export default function ComputeWordLayout({
               key={`compute.${index}`}
               onLayout={(e) => {
                 const { x, y, width, height } = e.nativeEvent.layout;
-                //console.log("\n ComputeWordLayout: onLayout for index ", index, ": x=", x, "y=", y, "width=", width, "height=", height);
+                //console.log("\n<<<<<<<<<--------- ComputeWordLayout: onLayout for index ", index, ": x=", x, "y=", y, "width=", width, "height=", height);
                 calculatedOffsets.current[index] = { width, height, x, y };
              
                 //console.log("calculatedOffsets for index ", index, ": ", calculatedOffsets.current[index]);
@@ -84,32 +84,42 @@ export default function ComputeWordLayout({
                 // (the array of WordContext.Provider components that wrap each Word component)
               
                 if (Object.keys(calculatedOffsets.current).length === children.length) {
-                  console.log("All words measured, calculating layout...");
+                  console.log("All words measured (width, height, x, y), calculating layout (relative to computeWordLayoutContainer)");
+                  console.log(" calculatedOffsets : ");
+                    for (const index in calculatedOffsets.current) {
+                      const { x, y, width, height } = calculatedOffsets.current[index];
+                        console.log(`####### calculatedOffsets (relative to computeWordLayoutContainer) for word index ${index}: x=${x}, y=${y}, width=${width}, height=${height}`);
+                    }
+
+                  console.log(" All the words have been displayed and therefore measured, so now we have the width, x, and y for each word saved in calculatedOffsets.")
                   /*
                     all the words have been displayed and therefore measured, so now we have the width, x, and y for each word 
                     saved in calculatedOffsets.current.
                   */
-                 // print out the calculatedOffsets for all words for debugging
-                  //  for (const index in calculatedOffsets.current) {
-                  //    const { x, y, width, height } = calculatedOffsets.current[index];
-                   //   console.log(`calculatedOffsets for word index ${index}: x=${x}, y=${y}, width=${width}, height=${height}`);
-                   // }
-                  // use calculatedOffsets to determine how many lines of words there are,
-                  //  which is needed to calculate the total height of the answer lines 
+                 
+                  console.log(" Use calculatedOffsets to determine how many lines of words there are");
+                  console.log(" We need to know the number of lines to calculate the total height of the answer lines");
                   // (linesHeight) so that we can position the word bank below the answer lines with some gap in between.
                   const numLines = new Set();
                   for (const index in calculatedOffsets.current) {
                     const { y } = calculatedOffsets.current[index];
                     numLines.add(y);
                   }
-                  //console.log("calculated numLines: ", numLines.size);
+                  console.log("Calculated numLines: ", numLines.size);
                   const numLinesSize = numLines.size < 3 ? numLines.size + 1 : numLines.size;
                   const linesHeight = numLinesSize * lineHeight; // total height of all lines (including gaps)
+                  console.log(" Adjust numLines to be at least 3 to ensure enough space for the word bank, so numLinesSize is: ", numLinesSize);
                   //console.log("linesHeight: ", linesHeight, "numLinesSize: ", numLinesSize);
                   // now, use the calculatedOffsets to initialize the offsets shared values for each word,
                   // this will set up the initial positions and sizes for each word that the drag-and-drop 
                   // system will use to position words during gestures.
 
+                  console.log(" Start initializing shared values (offsets) for each word based on calculatedOffsets. ")
+                  console.log(" This will set up the shared values that ClickableWordNew will use to position words during gestures.");
+                  console.log(" offsets before calculating layout: ");
+                  offsets.forEach((o, i) => {
+                    console.log(`index ${i}: order=${o.order.value}, x=${o.x.value}, y=${o.y.value}, originalX=${o.originalX.value}, originalY=${o.originalY.value}`);
+                  });
                   for (const index in calculatedOffsets.current) {
                     const { x, y, width } = calculatedOffsets.current[index];
                     // offsets is an array of shared value objects — one per word
@@ -137,30 +147,47 @@ export default function ComputeWordLayout({
                     console.log(`Here2  y = ${y} for index ${index}`);
                     offset.originalY.value = y + linesHeight + wordBankOffsetY;
                     console.log(` Here3 wordBankOffsetY = ${wordBankOffsetY} and linesHeight = ${linesHeight} for index ${index}`);
-                    console.log(" Here4 originalY will be set to: ", y + linesHeight + wordBankOffsetY, " for index ", index);
+                    console.log(" &&&&&&&&&&&&&&&&&&&&&&&&&&&&&& Here4 originalY will be set to: ", y + linesHeight + wordBankOffsetY, " for index ", index);
 
                     // note that offset.x and offset.y WILL BE UPDATED during tap gesture/dragging, 
-
                     // but originalX and originalY remain constant to represent the word's initial position
                     // in the word bank before any dragging/clicking occurs.
 
                     //console.log(`Initialized offsets for word index ${index}: order=${offset.order.value}, width=${offset.width.value}, originalX=${offset.originalX.value}, originalY=${offset.originalY.value}`);
                     
                     // the purpose of offsetStyles is to set the initial absolute positioning styles
+         
                     // for each word in the word bank,
                     offsetStyles.current[index] = {
                       position: "absolute",
+                      // position the words in the word bank with absolute positioning relative to their parent container
+                      // (ComputeWordLayout), using the measured x and y plus the calculated offset for the word bank 
                       height: wordHeight,
-                      top: y + linesHeight + wordBankOffsetY * 2,
-                      left: x + wordGap,
-                      width: width - wordGap * 2,
+                      top: y + linesHeight + wordBankOffsetY * 2, // top is needed for absolute positioning, 
+                      // and is set to the word's measured y position plus the total height of the answer
+                      //  lines and the word bank offset to position it in the word bank area below the answer lines
+                      left: x + wordGap, // left is needed for absolute positioning, 
+                      // and is set to the word's measured x position plus a word gap to add 
+                      // some spacing from the left edge of the container
+                      width: width - wordGap * 2,  // width is set to the measured width of the word minus 
+                      // some gap on both sides to add spacing between words in the word bank
                     };
                     //console.log("offsetStyles for index ", index, ": ", offsetStyles.current[index]);
                   }
+                  //offsets.forEach((o, i) => {
+                    // KPHAM: note that the following console log will not show the updated values of offsets because offsets is an array of 
+                    // shared value objects, and the .value properties are updated asynchronously by Reanimated on the UI thread.
+                    // this console.log runs immediately after on the JS thread, before those writes have actually applied.
+                    // therefore it will show the initial values of offsets (with order=-1 and width set, but x and y still at their initial values) 
+                    // rather than the updated values that was updated in the for loop above. 
+                    // --->>> won't give you updated values:
+                    //        console.log(`index ${i}: order=${o.order.value}, width=${o.width.value}, originalX=${o.originalX.value}, originalY=${o.originalY.value}`);
+                  //});
+                  console.log("Now starting timeout to call onLayout for parent...");
                   setTimeout(() => {
                     console.log("Time is up.  Calling onLayout with numLines: ", numLines.size, " and offsetStyles: ", offsetStyles.current);
                     onLayout({ numLines: numLines.size, wordStyles: offsetStyles.current });
-                  }, 1600);
+                  }, 16000);
                 }
                 
               }}
@@ -186,10 +213,21 @@ const styles = StyleSheet.create({
   computeWordLayoutContainer: {
     backgroundColor: "orange",  // DEBUG
     flexDirection: "row", // 
-    flexWrap: "wrap",
+    //left: 100, // DEBUG to test that the x positions of words are relative to the ComputeWordLayout container, 
+    // this value would shift computeWordLayoutContainer 100 pixels to the right, 
+    // However, the relative x positions of the words inside the container should remain the same,
+    // which would confirm that the word positions are calculated relative to the ComputeWordLayout 
+    // container as intended.
+    flexWrap: "wrap", // flexWrap affects how the words are laid out inside the ComputeWordLayout container.
+    // with flexWrap: "wrap", the words will automatically wrap to the next line when they reach the edge of the container,
     opacity: 20,
-    width: "100%",
+    width: "100%", // width=100% makes the ComputeWordLayout container take up the full width of its parent, 
+    // which is important for calculating word positions relative to the container and for
+    //  ensuring that words wrap correctly based on the CONTAINER WIDTH.
     flex: 0 , //default is 0, see explanation above, 
+    // position: 'relative' (default)
+    // a relative position is needed so that the absolute positioning of 
+    // its children (the words in ClickableWordNew) is calculated relative to it
   },
   center: {
     justifyContent: "center",
