@@ -159,6 +159,9 @@ export const calculateLayout = (
     input is the full array of Offset objects for all words, 
    */
 
+  // containerWidth is the width of the area where the words are placed (the answer area). 
+  // This is used to determine when to wrap to a new line.
+
 
   // note that the order value is set to -1 for words in the bank, so filtering by isNotInBank ensures we only get words that are currently placed in the answer area.
   //console.log("\n******** calculateLayout input", input.map((o) => ({ order: o.order.value, width: o.width.value })));
@@ -199,7 +202,6 @@ in memory. When line 180 writes offset.x.value = 0, it's modifying the same shar
   // calculates their x and y positions based on their widths and the container width, 
   // implementing a wrapping layout.
   for (let i = 0; i < offsets.length; i++) {
-
     const offset = offsets[i];
     const total_width = offsets.slice(lineBreak, i).reduce((acc, o) => acc + o.width.value + wordGap / 2, 0);
     // total with is calculated by summing the widths of all the words in the current line (from lineBreak to i) 
@@ -211,8 +213,8 @@ in memory. When line 180 writes offset.x.value = 0, it's modifying the same shar
       lineBreak = i;
       offset.x.value = 0;
     } else {
-      // else the current word fits on the current line, so we set its x position to the total width 
-      // of the current line.
+      // adding the current word's width to the total width of the current line DOESN'T exceeds 
+      // the container width, so we set its x position to the total width of the current line.
       offset.x.value = total_width;
     }
     // the y position is based on the line number, word height, and line gap. 
@@ -225,3 +227,50 @@ in memory. When line 180 writes offset.x.value = 0, it's modifying the same shar
     console.log(`index ${index}: order=${o.order.value}, width=${o.width.value} ,x=${o.x.value}, y=${o.y.value}`);
   });
 };
+
+/*
+what is lineBreak on line 192?
+
+Read Layout.ts (lines 189-208)
+lineBreak is the index of the first word on the current line. It starts at 0 (first word starts
+at the beginning of the array).
+When a word doesn't fit and wraps to a new line, lineBreak is updated to i — marking that 
+word as the new start of the next line.
+
+It's used in offsets.slice(lineBreak, i) on line 204 to measure only the words on the current line 
+when calculating total_width. Without it, slice would accumulate widths from all previous lines too, 
+giving a wrong total.
+
+Example with words [A, B, C, D] where C wraps:
+
+i=0: lineBreak=0, slice(0,0) → [] → total=0  (A goes to x=0)
+i=1: lineBreak=0, slice(0,1) → [A] → total=A.width  (B placed after A)
+i=2: lineBreak=0, slice(0,2) → [A,B] → total too wide → lineBreak=2, lineNumber=1 (C wraps)
+i=3: lineBreak=2, slice(2,3) → [C] → total=C.width  (D placed after C on line 2)
+
+*/
+
+/*
+Read Layout.ts (lines 198-202)
+Line 199 is total, not total_width. Let me re-read the correct line:
+
+Read Layout.ts (lines 202-209)
+total_width on line 204 is calculated using .reduce() on a slice of the offsets array:
+
+offsets.slice(lineBreak, i) — takes only the words already placed on the current line, 
+from the first word of the line (lineBreak) up to but not including the current word (i).
+
+.reduce((acc, o) => acc + o.width.value + wordGap / 2, 0) — sums up the width of each of those words, 
+adding wordGap / 2 per word as spacing. Starts at 0.
+
+For example, if the current line has 2 words with widths 50 and 70, and wordGap = 10:
+
+
+total_width = (50 + 5) + (70 + 5) = 130
+This tells you how much horizontal space is already consumed on the current line, 
+so you can decide whether the next word fits or needs to wrap.
+
+
+
+*/
+

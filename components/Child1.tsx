@@ -1,5 +1,5 @@
 import React, { Fragment, useMemo, useState } from 'react';
-import { LayoutChangeEvent, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
+import { LayoutChangeEvent, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSharedValue } from 'react-native-reanimated';
 import ClickableWordNew from './ClickableWordNew';
@@ -16,9 +16,27 @@ interface LayoutType {
     numLines: number;
     wordStyles: StyleProp<ViewStyle>[];
 }
+
+interface InputItem {
+    type: 'text' | 'fill';
+    value: string;
+    id: string; // Optional for text items
+  }
+  
 function Child1() {
 
     const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+
+    const [inputFields, setInputFields] = useState<InputItem[] | undefined>([
+        { type: 'text', value: 'The quick brown fox', id: 'text1' },
+        { type: 'fill', value: 'one', id: 'fill1' },
+        { type: 'text', value: 'jumps over the lazy dog.', id: 'text2' },
+        { type: 'fill', value: 'two', id: 'fill2' },
+        { type: 'text', value: 'Lorem ipsum dolor sit amet.', id: 'text3' },
+
+
+      ]);
+    
 
 const fontSize = 16;
 //const wordHeight = 30;
@@ -34,8 +52,33 @@ const [containerWidth, setContainerWidth] = useState(0);
 //  which is called after ComputeWordLayout finishes rendering the words and measures their layout.
 
 const [layout, setLayout] = useState<LayoutType | null>(null);
-  // this layout state variable is very important. It will be set by the ComputeWordLayout child component 
-  // after it measures the words and calculates their positions.
+
+const fillCount = inputFields?.filter(i => i.type === 'fill').length ?? 0;
+const [fillSlotPositions, setFillSlotPositions] = useState<{x: number, y: number}[]>([]);
+const measuredFills = React.useRef<({x: number, y: number} | null)[]>(Array(fillCount).fill(null));
+const inputRowLayout = React.useRef<{x: number, y: number} | null>(null);
+
+const trySetFillPositions = () => {
+  if (inputRowLayout.current && measuredFills.current.every(p => p !== null)) {
+    setFillSlotPositions(measuredFills.current.map(p => {
+        const x = p!.x + inputRowLayout.current!.x;
+        const y = p!.y + inputRowLayout.current!.y - 4;
+        return { x, y };
+      }));
+      
+  }
+};
+
+const onInputRowLayout = (e: LayoutChangeEvent) => {
+  inputRowLayout.current = { x: e.nativeEvent.layout.x, y: e.nativeEvent.layout.y };
+  trySetFillPositions();
+};
+
+const onFillSlotLayout = (e: LayoutChangeEvent, fillIndex: number) => {
+  const { x, y } = e.nativeEvent.layout;
+  measuredFills.current[fillIndex] = { x, y };
+  trySetFillPositions();
+};
 
 const wordBankOffsetY = 20  // the offset (distance) between the top of the word bank
 // and the bottom of the answer area. This is used to position the word bank below the answer area,
@@ -132,7 +175,7 @@ const wordElements = useMemo(() => {
   const LinesComponent = Lines;
 
   const enable_checkButton = () => {
-     console.log("enable_checkButton called from Child1");
+     //console.log("enable_checkButton called from Child1");
   }
 
   // offsets state is passed into ClickableWordNew for animation, it is also used
@@ -143,27 +186,41 @@ const wordElements = useMemo(() => {
     <GestureHandlerRootView>
     <View style={styles.container}>
         <DebugGrid width={dimensions.width} height={dimensions.height} />
-      <LinesComponent numLines={idealNumLines} containerHeight={linesContainerHeight} lineHeight={lineHeight} />
+      <View style={styles.inputRow} onLayout={onInputRowLayout}>
+        {(() => {
+          let fillIndex = 0;
+          return inputFields?.map((item) =>
+            item.type === 'text' ? (
+              <Text key={item.id} style={[styles.inputText, { lineHeight: wordHeight }]}>{item.value}</Text>
+            ) : (
+              <View
+                key={item.id}
+                style={[styles.fillSlot, { width: offsets[0].height.value || wordHeight * 3, height: wordHeight }]}
+                onLayout={(e) => onFillSlotLayout(e, fillIndex++)}
+              />
+            )
+          );
+        })()}
+      </View>
       <View style={{ minHeight: wordBankHeight }} />
-      {wordElements.map((child, index) => (
-        
-        <Fragment key={`${words[index]}-f-${index}`}>
-          <ClickableWordNew
-            offsets={offsets}
-            index={index}
-            containerWidth={containerWidth}
-            linesHeight={linesContainerHeight}
-            lineGap={lineGap}
-            wordHeight={wordHeight}
-            wordGap={wordGap}
-            wordBankOffsetY={wordBankOffsetY}
-            parentFunc={enable_checkButton}
-          >
-            {child}
-          </ClickableWordNew>
-        </Fragment>
-      ))}
+      <View style={[StyleSheet.absoluteFill, { zIndex: 1, backgroundColor: 'rgba(0,255,0,0.2)' }]}>
+        {wordElements.map((child, index) => (
+          <Fragment key={`${words[index]}-f-${index}`}>
+            <ClickableWordNew
+              offsets={offsets}
+              index={index}
+              wordHeight={wordHeight}
+              wordBankOffsetY={wordBankOffsetY}
+              fillSlotPositions={fillSlotPositions}
+              parentFunc={enable_checkButton}
+            >
+              {child}
+            </ClickableWordNew>
+          </Fragment>
+        ))}
+      </View>
     </View>
+
     </GestureHandlerRootView>
   );
 
@@ -172,11 +229,49 @@ const wordElements = useMemo(() => {
 
 const styles = StyleSheet.create({
   container: {
-     flex: 1,  // takes up the full available space of its parent (Home )
-    //flex: 0,  // default value. Will only takes up the space needed to fit its children,
-    // and will not stretch to fill extra space in the parent container.
+     flex: 0,
+    backgroundColor: 'lightgray',
+  },
+  inputRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'flex-end',
+    paddingHorizontal: 5,
+    paddingVertical: 10,
+    paddingTop: 20,
+    rowGap: 10,
+  },
+  inputText: {
+    fontSize: 16,
+  },
+  fillSlot: {
+    borderBottomWidth: 2,
+    borderBottomColor: '#999',
+    marginHorizontal: 3,
     backgroundColor: 'lightgray',
   },
 })
 
 export default Child1
+
+/*
+   <View style={styles.container}>
+        <DebugGrid width={dimensions.width} height={dimensions.height} />
+      <LinesComponent numLines={idealNumLines} containerHeight={linesContainerHeight} lineHeight={lineHeight} />
+      <View style={{ minHeight: wordBankHeight }} />
+      {wordElements.map((child, index) => (
+        
+        <Fragment key={`${words[index]}-f-${index}`}>
+          <ClickableWordNew
+            offsets={offsets}
+            index={index}
+            wordHeight={wordHeight}
+            wordBankOffsetY={wordBankOffsetY}
+            parentFunc={enable_checkButton}
+          >
+            {child}
+          </ClickableWordNew>
+        </Fragment>
+      ))}
+    </View>
+*/

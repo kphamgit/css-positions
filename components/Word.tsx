@@ -37,7 +37,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderRadius: 8,
     justifyContent: "center",
-    paddingHorizontal: 0,
+    paddingHorizontal: 2,
     flex: 0,  // default is 'flex: 0', but explicitly set here to emphasize that 
     //  a Word will take up only the space required to fit its text content (plus the horizontal padding),
     //  and will not stretch to fill extra space in the container.

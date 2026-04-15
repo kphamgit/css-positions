@@ -120,37 +120,26 @@ export default function ComputeWordLayout({
                   offsets.forEach((o, i) => {
                     console.log(`index ${i}: order=${o.order.value}, x=${o.x.value}, y=${o.y.value}, originalX=${o.originalX.value}, originalY=${o.originalY.value}`);
                   });
+                  // compute max width so all slots are the same size
+                  const maxWidth = Math.max(...Object.values(calculatedOffsets.current).map(o => o.width)) + 5; // +20 padding
+
                   for (const index in calculatedOffsets.current) {
-                    const { x, y, width } = calculatedOffsets.current[index];
-                    // offsets is an array of shared value objects — one per word
-                    // — used by Reanimated to drive the drag-and-drop animations on the UI thread. 
-                    // Each entry looks like:
-                    // {
-                    //   order: useSharedValue(0),
-                    //   width: useSharedValue(0),
-                    //   originalX: useSharedValue(0),
-                    //   originalY: useSharedValue(0),
+                    const { y } = calculatedOffsets.current[index];
+                    const slotX = Number(index) * (maxWidth + wordGap);
 
-                    // Now, initialize each word's offset with its measured position (from calculatedOffsets):
-                    // to set up the shared values that ClickableWordNew will use to position words during gestures.
                     const offset = offsets[index];
-                    // offset.order.value = -1 — marks the word as not yet placed in the answer area (unordered/in word bank)
+                    const { width } = calculatedOffsets.current[index];
                     offset.order.value = -1;
-                    offset.width.value = width;
-                    console.log(`Here1 x = ${x}  and y = ${y} for index ${index}`);
-                    offset.originalX.value = x;
-                    // wordBankOffsetY is added to the originalY so that the word bank
-                    // (where words start) appears below the answer lines
-                    // since the coordinate system is relative to the ComputeWordLayout container, 
-                    // we need to add the total height of the answer lines (linesHeight) and the wordBankOffsetY to the originalY to position the word bank below the answer area with some gap in between.
-                   
-                    console.log(`Here2  y = ${y} for index ${index}`);
+                    offset.width.value = width;    // original word width, used for the chip
+                    offset.height.value = maxWidth; // slot width, used for the placeholder
+                    offset.originalX.value = slotX;
                     offset.originalY.value = y + linesHeight + wordBankOffsetY;
-                    console.log(` Here3 wordBankOffsetY = ${wordBankOffsetY} and linesHeight = ${linesHeight} for index ${index}`);
-                    console.log(" &&&&&&&&&&&&&&&&&&&&&&&&&&&&&& Here4 originalY will be set to: ", y + linesHeight + wordBankOffsetY, " for index ", index);
 
-                    // note that offset.x and offset.y WILL BE UPDATED during tap gesture/dragging, 
-                    // but originalX and originalY remain constant to represent the word's initial position
+                    // answer slot: evenly spaced by maxWidth, y=0 (top of container)
+                    offset.x.value = slotX;
+                    offset.y.value = 0;
+
+                    // note that originalX and originalY remain constant to represent the word's initial position
                     // in the word bank before any dragging/clicking occurs.
 
                     //console.log(`Initialized offsets for word index ${index}: order=${offset.order.value}, width=${offset.width.value}, originalX=${offset.originalX.value}, originalY=${offset.originalY.value}`);
@@ -160,17 +149,10 @@ export default function ComputeWordLayout({
                     // for each word in the word bank,
                     offsetStyles.current[index] = {
                       position: "absolute",
-                      // position the words in the word bank with absolute positioning relative to their parent container
-                      // (ComputeWordLayout), using the measured x and y plus the calculated offset for the word bank 
                       height: wordHeight,
-                      top: y + linesHeight + wordBankOffsetY * 2, // top is needed for absolute positioning, 
-                      // and is set to the word's measured y position plus the total height of the answer
-                      //  lines and the word bank offset to position it in the word bank area below the answer lines
-                      left: x + wordGap, // left is needed for absolute positioning, 
-                      // and is set to the word's measured x position plus a word gap to add 
-                      // some spacing from the left edge of the container
-                      width: width - wordGap * 2,  // width is set to the measured width of the word minus 
-                      // some gap on both sides to add spacing between words in the word bank
+                      top: y + linesHeight + wordBankOffsetY * 2,
+                      left: slotX,
+                      width: maxWidth ,
                     };
                     //console.log("offsetStyles for index ", index, ": ", offsetStyles.current[index]);
                   }
@@ -187,7 +169,7 @@ export default function ComputeWordLayout({
                   setTimeout(() => {
                     console.log("Time is up.  Calling onLayout with numLines: ", numLines.size, " and offsetStyles: ", offsetStyles.current);
                     onLayout({ numLines: numLines.size, wordStyles: offsetStyles.current });
-                  }, 16000);
+                  }, 1600);
                 }
                 
               }}
